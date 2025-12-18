@@ -1,189 +1,143 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, Wallet, RefreshCw, Calendar, Database, Search } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Trophy, Wallet, RefreshCw, Calendar, Search, AlertCircle } from 'lucide-react';
 import MatchCard from './components/MatchCard';
 import BankrollManager from './components/BankrollManager';
 import { fetchUpcomingMatchesAndAnalyze, reAnalyzeMatch } from './services/geminiService';
 import { MatchAnalysis, BankrollSettings, DEFAULT_BANKROLL } from './types';
 
-const KEY_MATCHES = 'laymaster_matches_v2';
-const KEY_DATE = 'laymaster_last_fetch_date';
-const KEY_BANKROLL = 'laymaster_bankroll_v2';
-
 const App: React.FC = () => {
   const [matches, setMatches] = useState<MatchAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [bankrollSettings, setBankrollSettings] = useState<BankrollSettings>(DEFAULT_BANKROLL);
-  const [isBankrollModalOpen, setIsBankrollModalOpen] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<string>('');
+  const [bankroll, setBankroll] = useState<BankrollSettings>(() => {
+    const saved = localStorage.getItem('laymaster_bankroll_v2');
+    return saved ? JSON.parse(saved) : DEFAULT_BANKROLL;
+  });
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const sortMatchesByDate = (matchList: MatchAnalysis[]) => {
-    return [...matchList].sort((a, b) => {
-      try {
-        const parse = (dateStr: string) => {
-          const [datePart, timePart] = dateStr.split(' ');
-          const [day, month] = (datePart || "").split('/').map(n => parseInt(n));
-          const [hour, minute] = (timePart || "").split(':').map(n => parseInt(n));
-          const d = new Date();
-          if (month) d.setMonth(month - 1);
-          if (day) d.setDate(day);
-          if (hour !== undefined) d.setHours(hour);
-          if (minute !== undefined) d.setMinutes(minute);
-          return d.getTime();
-        };
-        return parse(a.date) - parse(b.date);
-      } catch (e) {
-        return 0;
-      }
+  // Ordenação Cronológica
+  const sortedMatches = useMemo(() => {
+    return [...matches].sort((a, b) => {
+      const parse = (s: string) => {
+        const [d, t] = s.split(' ');
+        const [day, mon] = d.split('/').map(Number);
+        const [h, m] = t.split(':').map(Number);
+        const now = new Date();
+        return new Date(now.getFullYear(), mon - 1, day, h, m).getTime();
+      };
+      try { return parse(a.date) - parse(b.date); } catch { return 0; }
     });
-  };
+  }, [matches]);
 
-  useEffect(() => {
-    const savedBankroll = localStorage.getItem(KEY_BANKROLL);
-    if (savedBankroll) {
-      setBankrollSettings(JSON.parse(savedBankroll));
-    }
-  }, []);
-
-  const loadData = useCallback(async (forceRefresh = false) => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
-    const today = new Date().toISOString().split('T')[0];
-    const savedDate = localStorage.getItem(KEY_DATE);
-    const savedMatches = localStorage.getItem(KEY_MATCHES);
-
-    if (!forceRefresh && savedDate === today && savedMatches) {
-      const parsed = JSON.parse(savedMatches);
-      setMatches(sortMatchesByDate(parsed));
-      setLastUpdate(savedDate);
+    setError(null);
+    try {
+      const data = await fetchUpcomingMatchesAndAnalyze();
+      if (data.length > 0) setMatches(data);
+      else if (!force) setError("Nenhum jogo encontrado para análise hoje.");
+    } catch (e) {
+      setError("Erro ao carregar dados da IA.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const data = await fetchUpcomingMatchesAndAnalyze();
-    if (data.length > 0) {
-      const sorted = sortMatchesByDate(data);
-      setMatches(sorted);
-      setLastUpdate(today);
-      localStorage.setItem(KEY_MATCHES, JSON.stringify(sorted));
-      localStorage.setItem(KEY_DATE, today);
-    }
-    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { load(); }, [load]);
 
-  const handleSaveBankroll = (newSettings: BankrollSettings) => {
-    setBankrollSettings(newSettings);
-    localStorage.setItem(KEY_BANKROLL, JSON.stringify(newSettings));
-  };
-
-  const handleReAnalyze = async (id: string) => {
+  const handleUpdate = async (id: string) => {
     setUpdatingId(id);
-    const match = matches.find(m => m.matchId === id);
-    if (match) {
-      const updatedMatch = await reAnalyzeMatch(match);
-      const newMatches = matches.map(m => m.matchId === id ? updatedMatch : m);
-      const sorted = sortMatchesByDate(newMatches);
-      setMatches(sorted);
-      localStorage.setItem(KEY_MATCHES, JSON.stringify(sorted));
+    const m = matches.find(x => x.matchId === id);
+    if (m) {
+      const updated = await reAnalyzeMatch(m);
+      setMatches(prev => prev.map(x => x.matchId === id ? updated : x));
     }
     setUpdatingId(null);
   };
 
-  return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-100 font-sans selection:bg-emerald-500/30">
-      <nav className="border-b border-slate-800 bg-[#0f172a]/95 sticky top-0 z-40 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <Trophy className="w-5 h-5 text-white" />
-              </div>
-              <h1 className="text-lg font-black tracking-tighter uppercase italic">
-                Lay<span className="text-emerald-500">Master</span>
-              </h1>
-            </div>
+  const saveBankroll = (newSettings: BankrollSettings) => {
+    setBankroll(newSettings);
+    localStorage.setItem('laymaster_bankroll_v2', JSON.stringify(newSettings));
+  };
 
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setIsBankrollModalOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all"
-              >
-                <Wallet className="w-4 h-4 text-emerald-400" />
-                <span className="hidden sm:inline text-xs font-bold uppercase">Banca</span>
-              </button>
-              
-              <button 
-                onClick={() => loadData(true)}
-                disabled={loading}
-                className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-lg transition-all disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline text-xs font-bold uppercase">{loading ? '...' : 'Atualizar'}</span>
-              </button>
+  return (
+    <div className="min-h-screen bg-[#0f172a] text-slate-100 pb-20">
+      <nav className="sticky top-0 z-40 bg-[#0f172a]/90 backdrop-blur-lg border-b border-slate-800 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="bg-emerald-500 p-1.5 rounded shadow-lg shadow-emerald-500/20">
+              <Trophy className="w-5 h-5 text-white" />
             </div>
+            <h1 className="text-xl font-black italic tracking-tighter">LAY<span className="text-emerald-500">MASTER</span></h1>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-2 rounded-xl hover:bg-slate-700 transition-all"
+            >
+              <Wallet className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline text-xs font-bold">GERENCIAR</span>
+            </button>
+            <button 
+              onClick={() => load(true)}
+              className="bg-emerald-600 p-2 rounded-xl hover:bg-emerald-500 transition-all"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <header className="mb-8">
-          <h2 className="text-2xl font-black text-white uppercase italic leading-none mb-2">
-            Análise <span className="text-emerald-500">Tempo Real</span>
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <div className="mb-10">
+          <h2 className="text-3xl font-black text-white italic uppercase leading-none">
+            Análise <span className="text-emerald-500">Inteligente</span>
           </h2>
-          <p className="text-slate-500 text-sm font-medium">IA focada em Lay ao pior time e Brasileirão A/B.</p>
-        </header>
-
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8 bg-slate-800/30 p-4 rounded-xl border border-slate-800">
-          <div className="flex items-center gap-3">
-            <Calendar className="w-4 h-4 text-emerald-500" />
-            <span className="text-xs font-black uppercase text-slate-300">Hoje</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {lastUpdate && (
-              <div className="text-[10px] text-slate-500 font-bold uppercase bg-slate-900 px-2 py-1 rounded">
-                Sinc: {lastUpdate}
-              </div>
-            )}
-            <div className="text-[10px] text-emerald-400 font-bold uppercase bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
-              {matches.filter(m => m.isValidOpportunity).length} Op.
-            </div>
-          </div>
+          <p className="text-slate-500 text-sm mt-2 font-medium">Série A, Série B e Ligas Europeias • LAY ao pior time.</p>
         </div>
 
-        {loading && matches.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 animate-pulse text-slate-600">
-            <Search className="w-12 h-12 mb-4" />
-            <p className="text-xs font-bold uppercase tracking-widest">Buscando jogos reais na web...</p>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-slate-600">
+            <Search className="w-16 h-16 animate-pulse mb-4 text-emerald-500/50" />
+            <span className="text-xs font-black uppercase tracking-widest">Consultando IA e Jogos Reais...</span>
           </div>
-        ) : matches.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {matches.map(match => (
-              <MatchCard 
-                key={match.matchId}
-                data={match}
-                bankroll={bankrollSettings}
-                onReAnalyze={handleReAnalyze}
-                isUpdating={updatingId === match.matchId}
-              />
-            ))}
+        ) : error ? (
+          <div className="text-center py-20 bg-slate-800/30 rounded-3xl border border-dashed border-slate-700">
+            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+            <p className="text-slate-400 font-bold">{error}</p>
+            <button onClick={() => load(true)} className="mt-4 text-emerald-500 font-black uppercase text-xs underline">Tentar novamente</button>
           </div>
         ) : (
-          <div className="text-center py-20 bg-slate-800/20 rounded-2xl border border-slate-800 border-dashed">
-             <h3 className="text-sm font-black text-slate-500 uppercase">Nenhum jogo ativo</h3>
-             <button onClick={() => loadData(true)} className="mt-4 text-xs font-bold text-emerald-500 underline uppercase">Tentar novamente</button>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedMatches.map(m => (
+              <MatchCard 
+                key={m.matchId} 
+                data={m} 
+                bankroll={bankroll} 
+                onReAnalyze={handleUpdate}
+                isUpdating={updatingId === m.matchId}
+              />
+            ))}
           </div>
         )}
       </main>
 
+      {/* Botão flutuante para mobile se escondido no topo */}
+      <button 
+        onClick={() => setIsModalOpen(true)}
+        className="fixed bottom-6 right-6 sm:hidden w-14 h-14 bg-emerald-600 rounded-full shadow-2xl flex items-center justify-center z-50 animate-bounce"
+      >
+        <Wallet className="w-6 h-6 text-white" />
+      </button>
+
       <BankrollManager 
-        isOpen={isBankrollModalOpen} 
-        onClose={() => setIsBankrollModalOpen(false)}
-        settings={bankrollSettings}
-        onSave={handleSaveBankroll}
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        settings={bankroll} 
+        onSave={saveBankroll} 
       />
     </div>
   );

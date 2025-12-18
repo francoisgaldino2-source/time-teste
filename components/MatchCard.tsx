@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { MatchAnalysis, RiskLevel, BankrollSettings } from '../types';
-import { RefreshCw, Trophy, AlertTriangle, TrendingDown } from 'lucide-react';
+import { RefreshCw, Trophy, Clock, AlertCircle } from 'lucide-react';
 
 interface Props {
   data: MatchAnalysis;
@@ -13,92 +13,84 @@ interface Props {
 const MatchCard: React.FC<Props> = ({ data, bankroll, onReAnalyze, isUpdating }) => {
   const stakePercentage = bankroll.stakes[data.riskLevel] || 0;
   const stakeAmount = (bankroll.totalBankroll * stakePercentage) / 100;
-  const isRecommended = data.isValidOpportunity;
-  
-  const getRiskColor = (risk: RiskLevel) => {
-    switch(risk) {
-      case RiskLevel.LOW: return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
-      case RiskLevel.MEDIUM: return 'text-amber-400 border-amber-500/30 bg-amber-500/10';
-      case RiskLevel.HIGH: return 'text-red-400 border-red-500/30 bg-red-500/10';
-      default: return 'text-slate-400 border-slate-600 bg-slate-800';
+
+  const getRiskStyles = (risk: RiskLevel) => {
+    switch (risk) {
+      case RiskLevel.LOW: return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      case RiskLevel.MEDIUM: return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case RiskLevel.HIGH: return 'bg-red-500/10 text-red-400 border-red-500/20';
+      default: return 'bg-slate-700/30 text-slate-400 border-slate-700';
     }
   };
 
-  const dateParts = data.date.split(' ');
-  const dateStr = dateParts[0] || '';
-  const timeStr = dateParts.length > 1 ? dateParts[1] : '';
+  const [dateStr, timeStr] = data.date.split(' ');
 
   return (
-    <div className={`bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-slate-600 transition-all flex flex-col h-full ${!isRecommended ? 'opacity-70' : ''}`}>
-      <div className="p-5 border-b border-slate-700/50 relative bg-slate-800/40">
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-3 h-3 text-emerald-500" />
-            <span className="text-[10px] font-bold text-emerald-500 tracking-wider uppercase truncate max-w-[120px]">{data.league}</span>
+    <div className={`group relative bg-slate-800/40 rounded-2xl border border-slate-700/50 backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all hover:border-emerald-500/30 hover:shadow-2xl hover:shadow-emerald-500/5 ${!data.isValidOpportunity ? 'grayscale opacity-60' : ''}`}>
+      {/* Header com Horário Gigante */}
+      <div className="p-4 border-b border-slate-700/50 bg-slate-800/60 flex justify-between items-center">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-1">
+            <Trophy className="w-3 h-3" /> {data.league}
+          </span>
+          <div className="text-3xl font-black text-white leading-none mt-1 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-slate-500" />
+            {timeStr || 'LIVE'}
           </div>
-          
-          <div className="text-right">
-            <div className="text-2xl font-black text-white leading-none tracking-tighter drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
-              {timeStr}
-            </div>
-            <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">
-              {dateStr}
-            </div>
-          </div>
+          <span className="text-[10px] text-slate-500 font-bold ml-7">{dateStr}</span>
         </div>
         
-        <div className="space-y-0.5 mt-1">
-          <h3 className="text-lg font-bold text-white truncate">{data.homeTeam}</h3>
-          <div className="text-xs text-slate-500 font-bold">vs</div>
-          <h3 className="text-lg font-bold text-slate-400 truncate">{data.awayTeam}</h3>
+        <div className={`px-2 py-1 rounded text-[10px] font-black border uppercase ${getRiskStyles(data.riskLevel)}`}>
+          Risco {data.riskLevel}
         </div>
       </div>
 
-      <div className="p-5 flex-1 flex flex-col bg-slate-900/20">
-        <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700/50 mb-4 flex-1">
-          <p className="text-slate-300 text-xs leading-relaxed italic">
+      {/* Times */}
+      <div className="p-5 space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-between items-center">
+            <span className="text-xl font-bold text-white tracking-tight truncate">{data.homeTeam}</span>
+            <span className="text-[10px] font-bold text-slate-600">MANDANTE</span>
+          </div>
+          <div className="h-px bg-slate-700/30 w-full my-1"></div>
+          <div className="flex justify-between items-center">
+            <span className="text-xl font-bold text-slate-400 tracking-tight truncate">{data.awayTeam}</span>
+            <span className="text-[10px] font-bold text-slate-600">VISITANTE</span>
+          </div>
+        </div>
+
+        {/* Análise IA */}
+        <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/50 mt-4 min-h-[80px]">
+          <p className="text-slate-400 text-xs leading-relaxed italic">
             "{data.analysisText}"
           </p>
         </div>
 
-        <div className={`w-full py-2.5 rounded-lg font-black text-xs text-center mb-4 transition-colors uppercase tracking-widest border
-          ${isRecommended 
-            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' 
-            : 'bg-slate-700/30 text-slate-500 border-slate-700 cursor-not-allowed'
-          }`}>
-          {isRecommended ? data.recommendation : 'Não Recomendado'}
+        {/* Recomendação */}
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">Estratégia Recomendada</span>
+          <span className="text-lg font-black text-emerald-400 uppercase italic">
+            {data.isValidOpportunity ? data.recommendation : 'AGUARDAR'}
+          </span>
         </div>
 
-        {isRecommended && (
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <div className="bg-slate-900 rounded border border-slate-700 p-2 flex flex-col justify-center items-center">
-               <span className="text-[9px] text-slate-500 uppercase font-black">Stake</span>
-               <div className="text-emerald-400 font-mono text-sm font-bold">
-                  {bankroll.currency} {stakeAmount.toFixed(2)}
-               </div>
-            </div>
-
-            <div className={`bg-slate-900 rounded border p-2 flex flex-col justify-center items-center ${getRiskColor(data.riskLevel)} border-opacity-30 bg-opacity-10`}>
-               <span className="text-[9px] opacity-70 uppercase font-black">Risco</span>
-               <div className="text-[10px] font-black uppercase">
-                  {data.riskLevel}
-               </div>
-            </div>
+        {/* Stake */}
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 text-center">
+            <span className="block text-[9px] text-slate-500 font-black uppercase mb-1">Sugerido ({stakePercentage}%)</span>
+            <span className="text-lg font-mono font-bold text-white">
+              {bankroll.currency} {stakeAmount.toFixed(2)}
+            </span>
           </div>
-        )}
-
-        <button 
-          onClick={() => onReAnalyze(data.matchId)}
-          disabled={isUpdating}
-          className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all
-            ${isUpdating 
-              ? 'bg-slate-700 text-slate-400' 
-              : 'bg-slate-700 hover:bg-slate-600 text-white'
-            }`}
-        >
-          <RefreshCw className={`w-3 h-3 ${isUpdating ? 'animate-spin' : ''}`} />
-          {isUpdating ? 'PROCESSANDO...' : 'RE-ANALISAR'}
-        </button>
+          <button 
+            onClick={() => onReAnalyze(data.matchId)}
+            disabled={isUpdating}
+            className="bg-slate-700 hover:bg-slate-600 rounded-xl flex items-center justify-center transition-all disabled:opacity-50"
+            title="Re-analisar"
+          >
+            <RefreshCw className={`w-5 h-5 text-slate-300 ${isUpdating ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
     </div>
   );
