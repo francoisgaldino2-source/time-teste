@@ -3,51 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LayMaster AI</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
-            colors: {
-              primary: {
-                900: '#0f172a',
-                800: '#1e293b',
-                700: '#334155',
-              },
-              accent: {
-                500: '#10b981', // Emerald
-                600: '#059669',
-              }
-            }
-          }
-        }
-      }
-    </script>
+    <meta name="description" content="LayMaster AI - Plataforma profissional de análise de futebol para trading esportivo." />
+    <title>LayMaster AI | Análise Profissional de Futebol</title>
+    <!-- Tailwind via CSS (evita o aviso de console do script de desenvolvimento) -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-      body {
-        background-color: #0f172a; /* slate-900 */
-        color: #f8fafc; /* slate-50 */
+      :root {
+        --bg-deep: #0f172a;
+        --accent: #10b981;
       }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-deep);
+        color: #f8fafc;
+        margin: 0;
+        overflow-x: hidden;
+      }
+      /* Custom scrollbar para parecer site premium */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #1e293b; }
+      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+      /* Classes utilitárias que o Tailwind JIT geraria, mas como usamos a versão estável, garantimos aqui */
+      .bg-slate-900\/90 { background-color: rgba(15, 23, 42, 0.9); }
+      .backdrop-blur-lg { backdrop-filter: blur(16px); }
+      .border-slate-800 { border-color: #1e293b; }
+      .text-emerald-500 { color: #10b981; }
+      .bg-emerald-500 { background-color: #10b981; }
+      .bg-slate-800 { background-color: #1e293b; }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0"
-  }
-}
-</script>
-</head>
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+        "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
   </body>

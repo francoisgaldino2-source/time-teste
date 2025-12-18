@@ -33,7 +33,7 @@ const analysisSchema = {
 
 async function searchMatches(): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Liste os jogos de futebol de hoje e amanhã, focando principalmente no Brasileirão Série A, Série B e grandes ligas europeias. Retorne no formato: Liga | Mandante vs Visitante | Horário HH:mm.`;
+  const prompt = `ENCONTRE TODOS OS JOGOS de hoje e amanhã, PRIORIZANDO ABSOLUTAMENTE o Brasileirão Série A e Série B. Inclua também grandes ligas europeias se houver jogos. Retorne no formato: Liga | Mandante vs Visitante | Horário HH:mm.`;
   
   try {
     const response = await ai.models.generateContent({
@@ -55,12 +55,16 @@ export const fetchUpcomingMatchesAndAnalyze = async (): Promise<MatchAnalysis[]>
   if (!matchesData) return [];
 
   const prompt = `
-    Com base nestes jogos: ${matchesData}
+    Com base nestes jogos reais encontrados na web: ${matchesData}
+    
     Analise cada um para o mercado de LAY (apostar contra).
-    Identifique o pior time em campo baseado em forma e desfalques.
-    Recomende 'LAY MANDANTE', 'LAY VISITANTE' ou 'LAY EMPATE'.
-    Foque especialmente na Série A e B do Brasil.
-    Retorne apenas o JSON.
+    CRITÉRIOS:
+    1. Identifique o pior time (pior forma, desfalques, má fase).
+    2. Recomende 'LAY MANDANTE', 'LAY VISITANTE' ou 'LAY EMPATE'.
+    3. Se o jogo for perigoso, marque 'isValidOpportunity' como false.
+    4. FOCO: Série A e B do Brasileirão.
+    
+    Retorne apenas o JSON puro seguindo o schema.
   `;
 
   try {
@@ -70,7 +74,7 @@ export const fetchUpcomingMatchesAndAnalyze = async (): Promise<MatchAnalysis[]>
       config: {
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
-        systemInstruction: "Você é um especialista em apostas contra (Lay) no futebol brasileiro e europeu."
+        systemInstruction: "Você é o maior especialista em trading esportivo do Brasil, focado em identificar zebras e times em má fase para apostar contra no intercâmbio."
       }
     });
 
@@ -88,7 +92,7 @@ export const fetchUpcomingMatchesAndAnalyze = async (): Promise<MatchAnalysis[]>
 
 export const reAnalyzeMatch = async (match: MatchAnalysis): Promise<MatchAnalysis> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Re-analise agora: ${match.homeTeam} vs ${match.awayTeam} (${match.league}). Foco total no pior em campo.`;
+  const prompt = `Re-analise em profundidade agora este jogo: ${match.homeTeam} vs ${match.awayTeam} (${match.league}). Busque notícias de última hora sobre desfalques ou crises nos clubes e ajuste a recomendação de LAY.`;
   
   try {
     const response = await ai.models.generateContent({
@@ -104,7 +108,8 @@ export const reAnalyzeMatch = async (match: MatchAnalysis): Promise<MatchAnalysi
             riskLevel: { type: Type.STRING },
             isValidOpportunity: { type: Type.BOOLEAN }
           }
-        }
+        },
+        tools: [{ googleSearch: {} }]
       }
     });
     const data = JSON.parse(response.text || "{}");
