@@ -1,5 +1,7 @@
 {
   "name": "LayMaster - AI Betting Analyst",
-  "description": "An intelligent football analysis tool using Gemini AI to identify Lay Betting opportunities on betting exchanges, featuring bankroll management and risk analysis.",
-  "requestFramePermissions": []
+  "description": "Ferramenta de análise de futebol com Gemini 3 Pro e Google Search Grounding.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }
