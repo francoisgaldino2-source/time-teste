@@ -2,17 +2,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MatchAnalysis, RiskLevel } from "../types";
 
-const generateId = () => Math.random().toString(36).substring(2, 11);
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// Helper para normalizar o nível de risco vindo da IA
 const normalizeRiskLevel = (input: string): RiskLevel => {
   if (!input) return RiskLevel.UNKNOWN;
-  const val = input.toUpperCase();
-  if (val.includes("BAIXO")) return RiskLevel.LOW;
-  if (val.includes("MÉDIO") || val.includes("MEDIO")) return RiskLevel.MEDIUM;
-  if (val.includes("ALTO")) return RiskLevel.HIGH;
+  const upper = input.toUpperCase().trim();
+  if (upper.includes("BAIXO") || upper === "LOW") return RiskLevel.LOW;
+  if (upper.includes("MÉDIO") || upper.includes("MEDIO") || upper === "MEDIUM") return RiskLevel.MEDIUM;
+  if (upper.includes("ALTO") || upper === "HIGH") return RiskLevel.HIGH;
   return RiskLevel.UNKNOWN;
 };
 
+// Schema simplificado seguindo as novas diretrizes
 const analysisSchema = {
   type: Type.ARRAY,
   items: {
@@ -21,50 +23,28 @@ const analysisSchema = {
       league: { type: Type.STRING },
       homeTeam: { type: Type.STRING },
       awayTeam: { type: Type.STRING },
-      date: { type: Type.STRING, description: "Formato DD/MM HH:mm" },
-      analysisText: { type: Type.STRING },
-      recommendation: { type: Type.STRING },
-      riskLevel: { type: Type.STRING },
+      date: { type: Type.STRING, description: "Formato: DD/MM HH:mm" },
+      analysisText: { type: Type.STRING, description: "Análise curta focada no pior time em campo." },
+      recommendation: { type: Type.STRING, description: "'LAY VISITANTE', 'LAY MANDANTE', 'LAY EMPATE' ou 'NÃO RECOMENDADO'" },
+      riskLevel: { type: Type.STRING, description: "BAIXO, MÉDIO ou ALTO" },
       isValidOpportunity: { type: Type.BOOLEAN }
     },
     required: ["league", "homeTeam", "awayTeam", "date", "analysisText", "recommendation", "riskLevel", "isValidOpportunity"]
   }
 };
 
-async function searchMatches(): Promise<string> {
+async function searchRealMatches(): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `ENCONTRE TODOS OS JOGOS de hoje e amanhã, PRIORIZANDO ABSOLUTAMENTE o Brasileirão Série A e Série B. Inclua também grandes ligas europeias se houver jogos. Retorne no formato: Liga | Mandante vs Visitante | Horário HH:mm.`;
+  const today = new Date().toLocaleDateString('pt-BR');
   
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: { tools: [{ googleSearch: {} }] }
-    });
-    return response.text || "";
-  } catch (e) {
-    console.error("Search error:", e);
-    return "";
-  }
-}
-
-export const fetchUpcomingMatchesAndAnalyze = async (): Promise<MatchAnalysis[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const matchesData = await searchMatches();
-  
-  if (!matchesData) return [];
-
   const prompt = `
-    Com base nestes jogos reais encontrados na web: ${matchesData}
+    Encontre os jogos de futebol para hoje (${today}) e amanhã.
+    Foque obrigatoriamente em:
+    - Brasileirão Série A
+    - Brasileirão Série B
+    - Premier League, La Liga, Serie A Italiana e Champions League.
     
-    Analise cada um para o mercado de LAY (apostar contra).
-    CRITÉRIOS:
-    1. Identifique o pior time (pior forma, desfalques, má fase).
-    2. Recomende 'LAY MANDANTE', 'LAY VISITANTE' ou 'LAY EMPATE'.
-    3. Se o jogo for perigoso, marque 'isValidOpportunity' como false.
-    4. FOCO: Série A e B do Brasileirão.
-    
-    Retorne apenas o JSON puro seguindo o schema.
+    Liste os jogos no formato: "Liga: Mandante vs Visitante (Horário HH:mm)".
   `;
 
   try {
@@ -72,29 +52,60 @@ export const fetchUpcomingMatchesAndAnalyze = async (): Promise<MatchAnalysis[]>
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
+        tools: [{ googleSearch: {} }]
+      }
+    });
+    return response.text || "";
+  } catch (error) {
+    console.error("Erro na busca de jogos:", error);
+    return "";
+  }
+}
+
+export const fetchUpcomingMatchesAndAnalyze = async (): Promise<MatchAnalysis[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const matchesText = await searchRealMatches();
+    
+    const prompt = `
+      Com base nestes jogos reais encontrados:
+      ${matchesText}
+
+      Analise cada um para o mercado de Lay (Exchange).
+      Critérios:
+      1. Identifique o PIOR TIME em campo (forma técnica, desfalques, motivação).
+      2. Recomende 'LAY MANDANTE' se o mandante for o pior, ou 'LAY VISITANTE' se o visitante for o pior.
+      3. Se o jogo for muito parelho mas com tendência a vitória de alguém, considere 'LAY EMPATE'.
+      4. Priorize jogos do Brasileirão Série A e B.
+      5. Retorne JSON conforme o schema.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
-        systemInstruction: "Você é o maior especialista em trading esportivo do Brasil, focado em identificar zebras e times em má fase para apostar contra no intercâmbio."
+        systemInstruction: "Você é um analista especialista em Lay Betting. Seu foco é identificar o time mais fraco em campo para apostar contra ele."
       }
     });
 
-    const results = JSON.parse(response.text || "[]");
-    return results.map((r: any) => ({
-      ...r,
+    const parsedData = JSON.parse(response.text || "[]");
+    return parsedData.map((item: any) => ({
+      ...item,
       matchId: generateId(),
-      riskLevel: normalizeRiskLevel(r.riskLevel)
+      riskLevel: normalizeRiskLevel(item.riskLevel)
     }));
-  } catch (e) {
-    console.error("Analysis error:", e);
+  } catch (error) {
+    console.error("Erro na análise:", error);
     return [];
   }
 };
 
 export const reAnalyzeMatch = async (match: MatchAnalysis): Promise<MatchAnalysis> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Re-analise em profundidade agora este jogo: ${match.homeTeam} vs ${match.awayTeam} (${match.league}). Busque notícias de última hora sobre desfalques ou crises nos clubes e ajuste a recomendação de LAY.`;
-  
   try {
+    const prompt = `Re-analise este jogo focando no Lay ao pior em campo: ${match.homeTeam} vs ${match.awayTeam}.`;
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -103,18 +114,26 @@ export const reAnalyzeMatch = async (match: MatchAnalysis): Promise<MatchAnalysi
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            league: { type: Type.STRING },
+            homeTeam: { type: Type.STRING },
+            awayTeam: { type: Type.STRING },
+            date: { type: Type.STRING },
             analysisText: { type: Type.STRING },
             recommendation: { type: Type.STRING },
             riskLevel: { type: Type.STRING },
             isValidOpportunity: { type: Type.BOOLEAN }
           }
-        },
-        tools: [{ googleSearch: {} }]
+        }
       }
     });
+
     const data = JSON.parse(response.text || "{}");
-    return { ...match, ...data, riskLevel: normalizeRiskLevel(data.riskLevel) };
-  } catch (e) {
+    return { 
+      ...data, 
+      matchId: match.matchId,
+      riskLevel: normalizeRiskLevel(data.riskLevel)
+    };
+  } catch (error) {
     return match;
   }
 };
